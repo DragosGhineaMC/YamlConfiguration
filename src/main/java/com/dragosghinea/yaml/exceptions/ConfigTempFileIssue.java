@@ -1,4 +1,4 @@
-package exceptions;
+package com.dragosghinea.yaml.exceptions;
 
 import lombok.AllArgsConstructor;
 import lombok.Getter;

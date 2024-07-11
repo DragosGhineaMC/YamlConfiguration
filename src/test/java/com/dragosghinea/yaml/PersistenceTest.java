@@ -1,6 +1,6 @@
 package com.dragosghinea.yaml;
 
-import exceptions.ConfigTempFileIssue;
+import com.dragosghinea.yaml.exceptions.ConfigTempFileIssue;
 import lombok.Getter;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.DisplayName;

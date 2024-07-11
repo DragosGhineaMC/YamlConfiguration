@@ -1,7 +1,7 @@
 package com.dragosghinea.yaml;
 
 import com.dragosghinea.yaml.annotations.Comments;
-import exceptions.ConfigTempFileIssue;
+import com.dragosghinea.yaml.exceptions.ConfigTempFileIssue;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import org.junit.jupiter.api.AfterEach;

@@ -4,7 +4,6 @@ import com.dragosghinea.yaml.annotations.Comments;
 import com.dragosghinea.yaml.annotations.OnCreationValue;
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.annotation.JsonProperty;
-import com.fasterxml.jackson.core.JsonGenerator;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.core.JsonToken;
 import com.fasterxml.jackson.databind.DeserializationFeature;
@@ -69,7 +68,7 @@ public class ConfigHandler<T extends ConfigValues> {
         });
     }
 
-    public T load(Supplier<T> onCreationInitializer) throws IOException {
+    public T load(Supplier<T> onCreationInitializer) throws IOException, ConfigTempFileIssue {
         if (!path.toFile().exists()) {
             T config = onCreationInitializer.get();
             applyOnCreationValues(config);
@@ -80,7 +79,7 @@ public class ConfigHandler<T extends ConfigValues> {
         return objectMapper.readValue(path.toFile(), configClass);
     }
 
-    public void save(T config) throws IOException {
+    public void save(T config) throws IOException, ConfigTempFileIssue {
         if (!path.toFile().exists()) {
             try {
                 if (path.getParent() != null && !path.getParent().toFile().exists()) {
@@ -94,9 +93,11 @@ public class ConfigHandler<T extends ConfigValues> {
         }
 
         objectMapper.writeValue(path.toFile(), config);
+        Map<String, String[]> comments = computeComments(config);
+        applyComments(path, comments);
     }
 
-    private void applyOnCreationValues(T config) {
+    private void applyOnCreationValues(ConfigValues config) {
         streamFields(config)
                 .filter(field -> field.isAnnotationPresent(OnCreationValue.class))
                 .forEach(field -> {
@@ -110,6 +111,21 @@ public class ConfigHandler<T extends ConfigValues> {
                     } catch (JsonProcessingException e) {
                         throw new RuntimeException(e);
                     }
+                    finally {
+                        field.setAccessible(false);
+                    }
+                });
+
+        streamFields(config)
+                .forEach(field -> {
+                    if (!ConfigValues.class.isAssignableFrom(field.getType()))
+                        return;
+
+                    Object configValuesObjectToUse = getFieldValue(field, config);
+                    if (configValuesObjectToUse == null)
+                        return;
+
+                    applyOnCreationValues((ConfigValues) configValuesObjectToUse);
                 });
     }
 
@@ -121,7 +137,7 @@ public class ConfigHandler<T extends ConfigValues> {
         return comments;
     }
 
-    private void computeInnerComments(String key, T config, Field field, Map<String, String[]> comments) {
+    private void computeInnerComments(String key, ConfigValues config, Field field, Map<String, String[]> comments) {
         if (field != null && !ConfigValues.class.isAssignableFrom(field.getType()))
             return;
 
@@ -132,7 +148,7 @@ public class ConfigHandler<T extends ConfigValues> {
         streamFields((ConfigValues) configValuesObjectToUse)
                 .forEach(innerField -> {
                     String innerKey = key.isEmpty() ? innerField.getName() : key + "." + innerField.getName();
-                    computeInnerComments(innerKey, config, innerField, comments);
+                    computeInnerComments(innerKey, (ConfigValues) configValuesObjectToUse, innerField, comments);
                 });
 
         streamFields((ConfigValues) configValuesObjectToUse)
@@ -144,12 +160,12 @@ public class ConfigHandler<T extends ConfigValues> {
                     if (innerField.isAnnotationPresent(JsonProperty.class))
                         fieldName = innerField.getAnnotation(JsonProperty.class).value();
 
-                    comments.put(key.isEmpty()? fieldName : key+"."+fieldName, annotation.value());
+                    comments.put(key.isEmpty() ? fieldName : key + "." + fieldName, annotation.value());
                 });
     }
 
     // try to get the value directly, then try to get it through a getter, then try to get it forcefully
-    private Object getFieldValue(Field field, T config) {
+    private Object getFieldValue(Field field, ConfigValues config) {
         try {
             return field.get(config);
         } catch (IllegalAccessException e) {
@@ -162,17 +178,11 @@ public class ConfigHandler<T extends ConfigValues> {
                     return field.get(config);
                 } catch (IllegalAccessException exc) {
                     throw new RuntimeException(exc);
-                }
-                finally {
+                } finally {
                     field.setAccessible(false);
                 }
             }
         }
-    }
-
-    public void testingComments(T config) throws IOException, ConfigTempFileIssue {
-        Map<String, String[]> comments = computeComments(config);
-        applyComments(path, comments);
     }
 
     private void applyComments(Path configPath, Map<String, String[]> comments) throws IOException, ConfigTempFileIssue {
@@ -200,7 +210,7 @@ public class ConfigHandler<T extends ConfigValues> {
                 BufferedReader in = new BufferedReader(new InputStreamReader(fis, StandardCharsets.UTF_8));
 
                 FileOutputStream fos = new FileOutputStream(configPath.toFile());
-                PrintWriter out = new PrintWriter(new OutputStreamWriter(fos, StandardCharsets.UTF_8));
+                PrintWriter out = new PrintWriter(new OutputStreamWriter(fos, StandardCharsets.UTF_8))
         ) {
 
             String thisLine;
@@ -250,22 +260,22 @@ public class ConfigHandler<T extends ConfigValues> {
                     keyBuilder.add(".");
                 } else if (parser.currentToken() == JsonToken.END_OBJECT) {
                     // is the final end object
-                    if (keyBuilder.size() == 1) {
+                    if (keyBuilder.size() <= 1) {
                         keyBuilder.clear();
                         continue;
                     }
 
-                    keyBuilder.pop();
+                    // clean up field name
+                    if (!keyBuilder.peek().equals("."))
+                        keyBuilder.pop();
                     keyBuilder.pop(); // the dot
-                    keyBuilder.pop();
+                    keyBuilder.pop(); // the field name for the object that is being closed
                 } else if (parser.currentToken() == JsonToken.FIELD_NAME) {
-                    // is the first field name in the object
-                    if (keyBuilder.isEmpty() || keyBuilder.peek().equals(".")) {
-                        keyBuilder.add(parser.getText());
-                    } else {
-                        keyBuilder.pop(); // previous field name
-                        keyBuilder.add(parser.getText());
-                    }
+                    // clean up previous sibling field name, if it exists
+                    if (!keyBuilder.isEmpty() && !keyBuilder.peek().equals("."))
+                        keyBuilder.pop();
+
+                    keyBuilder.add(parser.getText());
 
                     String key = String.join("", keyBuilder);
                     if (comments.containsKey(key)) {

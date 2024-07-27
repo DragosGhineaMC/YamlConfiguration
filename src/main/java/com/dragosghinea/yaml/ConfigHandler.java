@@ -40,6 +40,7 @@ public class ConfigHandler<T extends ConfigValues> {
 
     private final ObjectMapper objectMapper = new ObjectMapper(
             new YAMLFactory()
+                    .configure(YAMLGenerator.Feature.INDENT_ARRAYS_WITH_INDICATOR, true)
                     .disable(YAMLGenerator.Feature.WRITE_DOC_START_MARKER)
     );
 

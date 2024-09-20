@@ -2,6 +2,7 @@ package com.dragosghinea.yaml;
 
 import com.dragosghinea.yaml.annotations.Comments;
 import com.dragosghinea.yaml.exceptions.ConfigTempFileIssue;
+import com.fasterxml.jackson.annotation.JsonProperty;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import org.junit.jupiter.api.AfterEach;
@@ -55,8 +56,14 @@ public class CommentsTest {
             "          # This is another comment\n" +
             "          test: \"something\"";
 
+    private static final String TEST_FIELD_NAME_CHANGE_FILE_CONTENT = "different-than-the-field-name:\n" +
+            "  # Inner comment\n" +
+            "\n" +
+            "  # Seems to work\n" +
+            "  innerTest: \"innerTestContent\"";
+
     @Getter
-    public static class InnerSectionConfig extends ConfigValues{
+    public static class InnerSectionConfig extends ConfigValues {
         @Comments({"Inner comment", "", "Seems to work"})
         private String innerTest = "innerTestContent";
     }
@@ -76,6 +83,14 @@ public class CommentsTest {
 
         @Comments({""})
         private int cc = 1;
+    }
+
+    @Getter
+    public static class FieldWithJsonProperty extends ConfigValues {
+
+        @JsonProperty("different-than-the-field-name")
+        private InnerSectionConfig test = new InnerSectionConfig();
+
     }
 
     @Getter
@@ -117,5 +132,15 @@ public class CommentsTest {
         configHandler.load(() -> new IndentationConfig(5));
 
         assertEquals(TEST_INDENTATION_FILE_CONTENT, String.join("\n", Files.readAllLines(path)));
+    }
+
+    @Test
+    @DisplayName("Field name changed by JsonProperty")
+    public void testFieldNameChange() throws IOException {
+        Path path = Paths.get("test.yml");
+        ConfigHandler<FieldWithJsonProperty> configHandler = new ConfigHandler<>(FieldWithJsonProperty.class, path);
+        configHandler.load();
+
+        assertEquals(TEST_FIELD_NAME_CHANGE_FILE_CONTENT, String.join("\n", Files.readAllLines(path)));
     }
 }

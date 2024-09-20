@@ -42,6 +42,7 @@ public class ConfigHandler<T extends ConfigValues> {
             new YAMLFactory()
                     .configure(YAMLGenerator.Feature.INDENT_ARRAYS_WITH_INDICATOR, true)
                     .disable(YAMLGenerator.Feature.WRITE_DOC_START_MARKER)
+                    .disable(YAMLGenerator.Feature.SPLIT_LINES)
     );
 
     {
@@ -111,8 +112,7 @@ public class ConfigHandler<T extends ConfigValues> {
                         e.printStackTrace();
                     } catch (JsonProcessingException e) {
                         throw new RuntimeException(e);
-                    }
-                    finally {
+                    } finally {
                         field.setAccessible(false);
                     }
                 });
@@ -148,7 +148,8 @@ public class ConfigHandler<T extends ConfigValues> {
 
         streamFields((ConfigValues) configValuesObjectToUse)
                 .forEach(innerField -> {
-                    String innerKey = key.isEmpty() ? innerField.getName() : key + "." + innerField.getName();
+                    String fieldName = getFieldName(innerField);
+                    String innerKey = key.isEmpty() ? fieldName : key + "." + fieldName;
                     computeInnerComments(innerKey, (ConfigValues) configValuesObjectToUse, innerField, comments);
                 });
 
@@ -157,12 +158,17 @@ public class ConfigHandler<T extends ConfigValues> {
                 .forEach(innerField -> {
                     Comments annotation = innerField.getAnnotation(Comments.class);
 
-                    String fieldName = innerField.getName();
-                    if (innerField.isAnnotationPresent(JsonProperty.class))
-                        fieldName = innerField.getAnnotation(JsonProperty.class).value();
-
+                    String fieldName = getFieldName(innerField);
                     comments.put(key.isEmpty() ? fieldName : key + "." + fieldName, annotation.value());
                 });
+    }
+
+    private String getFieldName(Field field) {
+        if (field.isAnnotationPresent(JsonProperty.class)) {
+            return field.getAnnotation(JsonProperty.class).value();
+        }
+
+        return field.getName();
     }
 
     // try to get the value directly, then try to get it through a getter, then try to get it forcefully

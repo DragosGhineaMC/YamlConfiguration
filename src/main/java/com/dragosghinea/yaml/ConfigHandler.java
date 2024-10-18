@@ -50,6 +50,7 @@ public class ConfigHandler<T extends ConfigValues> {
         objectMapper.configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false);
     }
 
+    @Getter
     private final Path path;
 
     public ConfigHandler(Class<T> classOfTheParameter, Path path) {

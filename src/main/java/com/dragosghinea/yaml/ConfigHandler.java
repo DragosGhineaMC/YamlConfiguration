@@ -72,7 +72,7 @@ public class ConfigHandler<T extends ConfigValues> {
     }
 
     public T load(Supplier<T> onCreationInitializer) throws IOException, ConfigTempFileIssue {
-        if (!path.toFile().exists()) {
+        if (!path.toFile().exists() || path.toFile().length() == 0) {
             T config = onCreationInitializer.get();
             applyOnCreationValues(config);
             save(config);
